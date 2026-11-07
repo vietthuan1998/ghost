@@ -44,6 +44,11 @@ object Geo {
     fun restCenter(i: Int, w: Int, h: Int) =
         PointF((REST_LEFT + i * REST_PITCH + REST_W / 2) * w, (REST_TOP + REST_H / 2) * h)
 
+    fun ghostRect(row: Int, col: Int, width: Int, w: Int, h: Int) = RectF(
+        (GRID_LEFT + col * CELL_W) * w, (GHOST_TOP + row * ROW_H) * h,
+        (GRID_LEFT + (col + width) * CELL_W) * w, (GHOST_TOP + (row + 1) * ROW_H) * h
+    )
+
     fun fieldRect(row: Int, col: Int, w: Int, h: Int) = RectF(
         (GRID_LEFT + col * CELL_W) * w, (FIELD_TOP + row * ROW_H) * h,
         (GRID_LEFT + (col + 1) * CELL_W) * w, (FIELD_TOP + (row + 1) * ROW_H) * h

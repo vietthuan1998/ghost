@@ -2,6 +2,7 @@ package com.ghostassist
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Rect
 import android.graphics.RectF
 import com.google.android.gms.tasks.Tasks
@@ -79,11 +80,36 @@ class ScreenReader(ctx: Context) {
         prefs.edit().putString("tpl_$kind", JSONArray(sig.map { it.toDouble() }).toString()).apply()
     }
 
-    private fun classify(bmp: Bitmap, rf: RectF): String {
+    /**
+     * Li Zhuiyuan mặc áo vàng sáng (hue ~45°, V>0.8), Qin Li mặc áo tối/tím nên gần như không có pixel vàng sáng.
+     * Đo trên ảnh thật: LZ ~0.4, QL ~0.0 (dải ngực của ô; với thẻ Khu Nghỉ Ngơi thì dải dưới của thẻ).
+     */
+    private fun yellowFrac(bmp: Bitmap, rf: RectF, rest: Boolean): Float {
+        val y0 = if (rest) 0.55f else 0.42f; val y1 = if (rest) 0.90f else 0.58f
+        val r = clampRect(Rect(
+            (rf.left + rf.width() * 0.2f).toInt(), (rf.top + rf.height() * y0).toInt(),
+            (rf.left + rf.width() * 0.8f).toInt(), (rf.top + rf.height() * y1).toInt()
+        ), bmp.width, bmp.height)
+        if (r.width() < 2 || r.height() < 2) return 0f
+        val px = IntArray(r.width() * r.height())
+        bmp.getPixels(px, 0, r.width(), r.left, r.top, r.width(), r.height())
+        val hsv = FloatArray(3); var n = 0
+        for (p in px) {
+            Color.colorToHSV(p, hsv)
+            if (hsv[0] in 38f..58f && hsv[1] in 0.35f..0.8f && hsv[2] >= 0.8f) n++
+        }
+        return n.toFloat() / px.size
+    }
+
+    private fun classify(bmp: Bitmap, rf: RectF, rest: Boolean = false): String {
+        val y = yellowFrac(bmp, rf, rest)
+        if (y >= 0.2f) return "LZ"
+        if (y <= 0.06f) return "QL"
+        // vùng mơ hồ: nhờ ảnh mẫu người dùng đã học (nếu có), không thì coi là Li Zhuiyuan
         val lz = loadTpl("LZ"); val ql = loadTpl("QL")
-        if (lz == null || ql == null) return "LZ" // chưa học Qin Li -> coi tất cả là Li Zhuiyuan
-        val s = signature(bmp, rf)
-        fun d(t: FloatArray) = s.indices.sumOf { abs(s[it] - t[it]).toDouble() }
+        if (lz == null || ql == null) return "LZ"
+        val sg = signature(bmp, rf)
+        fun d(t: FloatArray) = sg.indices.sumOf { abs(sg[it] - t[it]).toDouble() }
         return if (d(lz) <= d(ql)) "LZ" else "QL"
     }
 
@@ -127,7 +153,7 @@ class ScreenReader(ctx: Context) {
             val rf = Geo.restRect(i, w, h)
             val corner = Rect((rf.left + rf.width() * 0.55f).toInt(), rf.top.toInt(), rf.right.toInt(), (rf.top + rf.height() * 0.35f).toInt())
             val lv = readNumbers(bmp, corner).firstOrNull()?.v
-            rest.put(if (lv == null) JSONObject.NULL else comp(classify(bmp, rf), lv))
+            rest.put(if (lv == null) JSONObject.NULL else comp(classify(bmp, rf, true), lv))
         }
 
         val runes = JSONObject().put("fire", parseCount(bmp, Geo.FIRE_NUM)).put("ice", parseCount(bmp, Geo.ICE_NUM))

@@ -146,6 +146,32 @@ class HighlightView(ctx: Context) : View(ctx) {
             if (tr != null) badge(c, tr, when (s.optString("kind")) { "merge" -> "GỘP"; "swap" -> "B"; else -> "ĐẾN" }, 0xFF34C759.toInt(), tp)
         }
 
+        sug?.optJSONArray("tags")?.let { arr ->
+            val tsz = 22f * u
+            badgeText.textSize = tsz
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                val zone = o.getString("zone")
+                val a = o.getInt("a"); val b = o.optInt("b")
+                val rc = when (zone) {
+                    "ghost" -> Geo.ghostRect(a, b, o.optInt("w", 1), w, h)
+                    "rest" -> Geo.restRect(a, w, h)
+                    else -> Geo.fieldRect(a, b, w, h)
+                }
+                val label = o.getString("text")
+                val tw = badgeText.measureText(label) + tsz; val th = tsz * 1.5f
+                val l = rc.left + 6f * u
+                val t = if (zone == "field") rc.bottom - th - 6f * u else rc.top + 6f * u
+                fill.color = when {
+                    zone == "ghost" -> 0xDDFF8A80.toInt()
+                    label.startsWith("QL") -> 0xDDD1A8FF.toInt()
+                    else -> 0xDDFFE082.toInt()
+                }
+                c.drawRoundRect(l, t, l + tw, t + th, th / 2, th / 2, fill)
+                c.drawText(label, l + tw / 2, t + th / 2 + tsz * 0.35f, badgeText)
+            }
+        }
+
         if (steps.isNotEmpty()) {
             text.textSize = 34f * u; hintPaint.textSize = 26f * u
             val pad = 16f * u

@@ -8,9 +8,12 @@ export default function App() {
   const [perm, setPerm] = useState(false);
   const [running, setRunning] = useState(false);
   const [rest3, setRest3] = useState(false); // ô Khu Nghỉ Ngơi thứ 3 đã mở khoá chưa
+  const [debug, setDebug] = useState(true); // hiện nhãn "app đọc được gì" trên màn hình
   const [log, setLog] = useState('');
   const rest3Ref = useRef(rest3);
   rest3Ref.current = rest3;
+  const debugRef = useRef(debug);
+  debugRef.current = debug;
 
   const refresh = () => GhostAssist.hasOverlayPermission().then(setPerm);
   useEffect(() => { refresh(); }, []);
@@ -20,7 +23,7 @@ export default function App() {
       try {
         const board = boardFromNative(json, rest3Ref.current ? 3 : 2);
         const s = suggest(board, { depth: 4, beam: 80 });
-        GhostAssist.showSuggestion(overlayFromSuggestion(s, board));
+        GhostAssist.showSuggestion(overlayFromSuggestion(s, board, debugRef.current));
         setLog(`Đọc được ${board.ghosts.length} Oán Linh\n` + JSON.stringify(board, null, 1));
       } catch (e: any) {
         GhostAssist.showSuggestion(JSON.stringify({ text: 'Lỗi giải: ' + e.message }));
@@ -45,6 +48,7 @@ export default function App() {
         {!perm && <Button title="Mở cài đặt quyền" onPress={() => { GhostAssist.openOverlaySettings(); }} />}
         <Button title="Kiểm tra lại quyền" onPress={refresh} />
         <View style={s.row}><Text>Ô Khu Nghỉ Ngơi thứ 3 đã mở</Text><Switch value={rest3} onValueChange={setRest3} /></View>
+        <View style={s.row}><Text>Hiện nhãn kiểm tra (HP, loại, cấp)</Text><Switch value={debug} onValueChange={setDebug} /></View>
         <Text style={s.h2}>2) Bật trợ lý</Text>
         <Button title={running ? 'Đang chạy — bấm để dừng' : 'Bật (cho phép chụp màn hình)'} onPress={running ? stop : start} disabled={!perm} />
         <Text style={s.hint}>Mở game, bấm nút 👻 nổi mỗi lượt để nhận gợi ý. Có thể chuyển sang game, app vẫn chạy nền.</Text>

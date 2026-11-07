@@ -25,7 +25,7 @@ const route = (fr: number, fc: number, r: number, c: number) =>
   fr === r ? `cột ${fc + 1} → cột ${c + 1} (${rowName(r)})` : `${cell(fr, fc)} → ${cell(r, c)}`;
 
 /** Hành động -> JSON cho lớp phủ (vòng tròn, mũi tên, thẻ hướng dẫn từng bước). */
-export function overlayFromSuggestion(s: Suggestion, board: Board): string {
+export function overlayFromSuggestion(s: Suggestion, board: Board, debug = false): string {
   const a: Action = s.action;
   const m = a.main;
   const out: any = { kind: m.t };
@@ -62,6 +62,14 @@ export function overlayFromSuggestion(s: Suggestion, board: Board): string {
   if (a.ice) { out.ice = true; steps.push('Dùng Bùa Băng'); }
   if (!s.survives) steps.push('⚠ Khó thoát, cân nhắc dùng bùa');
 
+  if (debug) {
+    // nhãn "app đọc được gì" để đối chiếu ngay trên màn hình
+    const tags: any[] = [];
+    board.ghosts.forEach((g) => tags.push({ zone: 'ghost', a: g.row, b: g.col, w: g.width, text: `HP${g.hp}` }));
+    board.field.forEach((row, r) => row.forEach((c, i) => c && tags.push({ zone: 'field', a: r, b: i, text: `${c.kind}${c.level}` })));
+    board.rest.forEach((c, i) => c && tags.push({ zone: 'rest', a: i, text: `${c.kind}${c.level}` }));
+    out.tags = tags;
+  }
   out.steps = steps;
   out.text = steps.join(' + '); // dự phòng cho bản native cũ
   out.hint = 'Xong bấm 👻 để cập nhật';
