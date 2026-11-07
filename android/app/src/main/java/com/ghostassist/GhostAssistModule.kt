@@ -43,6 +43,20 @@ class GhostAssistModule(private val rc: ReactApplicationContext) :
         s.learn(kind, zone, a, b) { p.resolve(it) }
     }
 
+    @ReactMethod fun setAiConfig(key: String, model: String) { AiConfig.save(rc, key, model) }
+
+    @ReactMethod fun clearAiKey() { AiConfig.clearKey(rc) }
+
+    /** Không trả khoá về JS, chỉ 4 ký tự cuối để người dùng nhận ra. */
+    @ReactMethod fun getAiConfig(p: Promise) {
+        val k = AiConfig.key(rc)
+        val m = Arguments.createMap()
+        m.putBoolean("hasKey", k.isNotBlank())
+        m.putString("keyTail", if (k.length >= 4) k.takeLast(4) else "")
+        m.putString("model", AiConfig.model(rc))
+        p.resolve(m)
+    }
+
     @ReactMethod fun addListener(name: String) {}
     @ReactMethod fun removeListeners(count: Int) {}
 

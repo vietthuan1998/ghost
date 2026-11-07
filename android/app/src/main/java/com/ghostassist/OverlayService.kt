@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -26,6 +27,9 @@ class OverlayService : Service() {
 
     private lateinit var wm: WindowManager
     private var button: TextView? = null
+    private var aiButton: TextView? = null
+    private var ai: AiReader? = null
+    private val overlayType = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
     private var hl: HighlightView? = null
     private var grabber: ScreenGrabber? = null
     private var reader: ScreenReader? = null
@@ -40,7 +44,7 @@ class OverlayService : Service() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(NotificationChannel(ch, "Ghost Assist", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, ch).setContentTitle("Ghost Assist đang chạy")
-            .setContentText("Bấm nút 👻 nổi để phân tích bàn cờ").setSmallIcon(android.R.drawable.ic_menu_view).build()
+            .setContentText("Bấm 👻 (OCR) hoặc 🤖 (đọc bằng AI) để phân tích bàn cờ").setSmallIcon(android.R.drawable.ic_menu_view).build()
         if (Build.VERSION.SDK_INT >= 29) startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
         else startForeground(1, n)
 
@@ -52,13 +56,14 @@ class OverlayService : Service() {
             ?: run { stopSelf(); return START_NOT_STICKY }
         grabber = ScreenGrabber(this, projection)
         reader = ScreenReader(this)
+        ai = AiReader(this)
         addViews()
         return START_NOT_STICKY
     }
 
     private fun addViews() {
         wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        val type = overlayType
 
         hl = HighlightView(this)
         // Phủ đúng toàn bộ màn hình thật (cùng khung với ảnh chụp), kể cả vùng thanh trạng thái / tai thỏ.
@@ -79,12 +84,17 @@ class OverlayService : Service() {
         }
         wm.addView(hl, hlp)
 
+        button = floatingButton("👻", 0xCC5B3FD1.toInt(), 400) { analyze(false) }
+        aiButton = floatingButton("🤖", 0xCC0E8A7D.toInt(), 560) { analyze(true) }
+    }
+
+    private fun floatingButton(label: String, color: Int, startY: Int, onTap: () -> Unit): TextView {
         val lp = WindowManager.LayoutParams(
-            140, 140, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
-        ).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = 400 }
-        button = TextView(this).apply {
-            text = "👻"; textSize = 26f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0xCC5B3FD1.toInt()) }
+            140, 140, overlayType, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
+        ).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = startY }
+        val v = TextView(this).apply {
+            text = label; textSize = 26f; gravity = Gravity.CENTER; setTextColor(Color.WHITE)
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(color) }
             var dx = 0f; var dy = 0f; var sx = 0; var sy = 0; var moved = false
             setOnTouchListener { _, e ->
                 when (e.action) {
@@ -93,30 +103,37 @@ class OverlayService : Service() {
                         if (abs(e.rawX - dx) > 12 || abs(e.rawY - dy) > 12) moved = true
                         if (moved) { lp.x = sx + (e.rawX - dx).toInt(); lp.y = sy + (e.rawY - dy).toInt(); wm.updateViewLayout(this, lp) }
                     }
-                    MotionEvent.ACTION_UP -> if (!moved) analyze()
+                    MotionEvent.ACTION_UP -> if (!moved) onTap()
                 }
                 true
             }
         }
-        wm.addView(button, lp)
+        wm.addView(v, lp)
+        return v
     }
 
-    private fun analyze() {
-        hl?.showMessage("Đang phân tích…")
+    /** useAi=false: OCR trên máy (nhanh, miễn phí). useAi=true: gửi ảnh cho Claude đọc (chậm vài giây, cần khoá API). */
+    private fun analyze(useAi: Boolean) {
+        hl?.showMessage(if (useAi) "Đang chụp màn hình…" else "Đang phân tích…")
         // ẩn lớp phủ + nút để không lọt vào ảnh chụp
         ui.postDelayed({
-            hl?.visibility = View.INVISIBLE; button?.visibility = View.INVISIBLE
+            hl?.visibility = View.INVISIBLE; button?.visibility = View.INVISIBLE; aiButton?.visibility = View.INVISIBLE
             ui.postDelayed({
                 bg.execute {
-                    var out: JSONObject? = null; var err: String? = null
-                    try {
-                        val bmp = grabber?.captureOnce()
-                        if (bmp == null) err = "Không chụp được màn hình, thử lại."
-                        else out = reader?.parse(bmp)
-                    } catch (t: Throwable) { err = "Lỗi đọc màn hình: ${t.message}" }
+                    val shot: Bitmap? = try { grabber?.captureOnce() } catch (t: Throwable) { null }
                     ui.post {
-                        hl?.visibility = View.VISIBLE; button?.visibility = View.VISIBLE
-                        if (out != null && GhostAssistModule.instance != null) GhostAssistModule.instance!!.emitBoard(out.toString())
+                        hl?.visibility = View.VISIBLE; button?.visibility = View.VISIBLE; aiButton?.visibility = View.VISIBLE
+                        if (shot == null) hl?.showMessage("Không chụp được màn hình, thử lại.")
+                        else if (useAi) hl?.showMessage("AI đang đọc bàn cờ… (vài giây)")
+                    }
+                    val bmp = shot ?: return@execute
+                    var out: JSONObject? = null; var err: String? = null
+                    try { out = if (useAi) ai?.read(bmp) else reader?.parse(bmp) }
+                    catch (e: AiReader.AiError) { err = e.message }
+                    catch (t: Throwable) { err = "Lỗi đọc màn hình: ${t.message}" }
+                    ui.post {
+                        val m = GhostAssistModule.instance
+                        if (out != null && m != null) m.emitBoard(out.toString())
                         else hl?.showMessage(err ?: "Ứng dụng chính chưa sẵn sàng, hãy mở lại app.")
                     }
                 }
@@ -136,7 +153,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         instance = null
-        runCatching { wm.removeView(button) }; runCatching { wm.removeView(hl) }
+        runCatching { wm.removeView(button) }; runCatching { wm.removeView(aiButton) }; runCatching { wm.removeView(hl) }
         grabber?.release()
         super.onDestroy()
     }
