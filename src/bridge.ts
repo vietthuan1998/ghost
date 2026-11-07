@@ -1,4 +1,4 @@
-import { Action, Board, Suggestion } from './engine/types';
+import { Action, Board, Companion, Suggestion } from './engine/types';
 import { COLS, FIELD_ROWS } from './engine/rules';
 
 /** JSON từ native (ScreenReader.parse) -> Board cho engine. */
@@ -14,44 +14,54 @@ export function boardFromNative(json: string, restUnlocked: number): Board {
 }
 
 const nameOf = (k: string) => (k === 'LZ' ? 'Li Zhuiyuan' : 'Qin Li');
+const who = (c?: Companion | null) => (c ? `${nameOf(c.kind)} Lv${c.level}` : 'đồng hành');
 
-/** Hành động -> JSON cho lớp phủ + câu hướng dẫn tiếng Việt. */
+// "hàng trên" = hàng sát Oán Linh, "hàng dưới" = hàng sát Khu Nghỉ Ngơi; cột đếm từ trái sang phải.
+// Tránh nói "hàng 1/hàng 2" vì dễ nhầm với hàng của sân Oán Linh phía trên.
+const rowName = (r: number) => (FIELD_ROWS === 2 ? (r === 0 ? 'hàng trên' : 'hàng dưới') : `hàng ${r + 1}`);
+const cell = (r: number, c: number) => `${rowName(r)}, cột ${c + 1}`;
+
+/** Hành động -> JSON cho lớp phủ (vòng tròn, mũi tên, thẻ hướng dẫn từng bước). */
 export function overlayFromSuggestion(s: Suggestion, board: Board): string {
   const a: Action = s.action;
   const m = a.main;
-  const cell = (r: number, c: number) => `hàng ${r + 1}, cột ${c + 1}`;
-  const out: any = {};
-  const parts: string[] = [];
+  const out: any = { kind: m.t };
+  const steps: string[] = [];
 
   switch (m.t) {
     case 'place': {
-      const comp = board.rest[m.rest]!;
+      const comp = board.rest[m.rest];
       out.from = { zone: 'rest', a: m.rest };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      parts.push(`Đặt ${nameOf(comp.kind)} Lv${comp.level} từ Khu Nghỉ Ngơi #${m.rest + 1} → ${cell(m.r, m.c)}`);
+      steps.push(`Kéo ${who(comp)} từ Khu Nghỉ Ngơi (thẻ ${m.rest + 1}) xuống ${cell(m.r, m.c)}`);
       break;
     }
     case 'move':
       out.from = { zone: 'field', a: m.fr, b: m.fc };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      parts.push(`Di chuyển ${cell(m.fr, m.fc)} → ${cell(m.r, m.c)}`);
+      steps.push(`Kéo ${who(board.field[m.fr]?.[m.fc])} từ ${cell(m.fr, m.fc)} sang ${cell(m.r, m.c)}`);
       break;
-    case 'merge':
+    case 'merge': {
+      const src = board.field[m.fr]?.[m.fc];
       out.from = { zone: 'field', a: m.fr, b: m.fc };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      parts.push(`Nâng cấp: kéo ${cell(m.fr, m.fc)} vào ${cell(m.r, m.c)}`);
+      steps.push(`Gộp để lên cấp: kéo ${who(src)} (${cell(m.fr, m.fc)}) vào ${cell(m.r, m.c)}`);
       break;
+    }
     case 'swap':
       out.from = { zone: 'field', a: m.fr, b: m.fc };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      parts.push(`Đổi chỗ ${cell(m.fr, m.fc)} ↔ ${cell(m.r, m.c)}`);
+      steps.push(`Đổi chỗ ${cell(m.fr, m.fc)} ⇄ ${cell(m.r, m.c)}`);
       break;
     case 'pass':
-      parts.push('Không cần hành động lượt này');
+      steps.push('Lượt này không cần di chuyển');
   }
-  if (a.fireCol !== undefined) { out.fireCol = a.fireCol; parts.push(`Dùng Rune Ngọn Lửa cột ${a.fireCol + 1}`); }
-  if (a.ice) { out.ice = true; parts.push('Dùng Rune Băng Giá'); }
-  if (!s.survives) parts.push('⚠ Khó thoát, nên cân nhắc rune');
-  out.text = parts.join(' + ');
+  if (a.fireCol !== undefined) { out.fireCol = a.fireCol; steps.push(`Dùng Rune Ngọn Lửa lên cột ${a.fireCol + 1} (vùng đỏ)`); }
+  if (a.ice) { out.ice = true; steps.push('Dùng Rune Băng Giá (vùng xanh)'); }
+  if (!s.survives) steps.push('⚠ Khó thoát, cân nhắc dùng rune');
+
+  out.steps = steps;
+  out.text = steps.join(' + '); // dự phòng cho bản native cũ
+  out.hint = 'Làm xong bấm 👻 để cập nhật gợi ý';
   return JSON.stringify(out);
 }

@@ -61,11 +61,23 @@ class OverlayService : Service() {
         val type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
 
         hl = HighlightView(this)
-        wm.addView(hl, WindowManager.LayoutParams(
-            -1, -1, type,
+        // Phủ đúng toàn bộ màn hình thật (cùng khung với ảnh chụp), kể cả vùng thanh trạng thái / tai thỏ.
+        val sw = grabber?.width ?: WindowManager.LayoutParams.MATCH_PARENT
+        val sh = grabber?.height ?: WindowManager.LayoutParams.MATCH_PARENT
+        hl?.refW = if (sw > 0) sw else 0; hl?.refH = if (sh > 0) sh else 0
+        val hlp = WindowManager.LayoutParams(
+            sw, sh, type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-            PixelFormat.TRANSLUCENT))
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START; x = 0; y = 0
+            if (Build.VERSION.SDK_INT >= 30)
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            else if (Build.VERSION.SDK_INT >= 28)
+                layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        wm.addView(hl, hlp)
 
         val lp = WindowManager.LayoutParams(
             140, 140, type, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT
