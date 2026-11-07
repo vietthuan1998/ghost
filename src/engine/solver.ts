@@ -33,7 +33,6 @@ export function genActions(b: Board): Action[] {
   for (const main of mains)
     for (const fc of fireCols)
       for (const ice of iceOpts) {
-        if (fc !== undefined && ice) continue; // không gộp 2 rune trong 1 nước để giảm nhánh
         out.push({ main, ...(fc !== undefined ? { fireCol: fc } : {}), ...(ice ? { ice } : {}) });
       }
   return out;
@@ -62,7 +61,7 @@ export function evaluate(b: Board, rules: Rules): number {
 
   let threat = 0;
   for (let c = 0; c < COLS; c++) {
-    const gs = b.ghosts.filter((g) => covers(g, c)).sort((x, y) => y.row - x.row);
+    const gs = b.ghosts.filter((g) => g.width <= 1 && covers(g, c)).sort((x, y) => y.row - x.row);
     let need = 0;
     for (const g of gs) {
       const t = ROWS - g.row; // số lần bị bắn trước khi vào Khu Chiến Đấu
@@ -70,6 +69,14 @@ export function evaluate(b: Board, rules: Rules): number {
       const deficit = Math.max(0, need - lz[c] * t);
       threat += deficit * (1 + g.row);
     }
+  }
+  for (const g of b.ghosts) {
+    if (g.width <= 1) continue;
+    let lzP = 0, qlP = 0;
+    for (let c = g.col; c < g.col + g.width && c < COLS; c++) { lzP += lz[c]; qlP += ql[c]; }
+    const t = ROWS - g.row;
+    const deficit = Math.max(0, g.hp - qlP * t - lzP * t);
+    threat += deficit * (1 + g.row);
   }
   let emptyField = 0;
   for (const row of b.field) for (const c of row) if (!c) emptyField++;

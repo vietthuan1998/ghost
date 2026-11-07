@@ -20,6 +20,9 @@ const who = (c?: Companion | null) => (c ? `${nameOf(c.kind)} Lv${c.level}` : '�
 // Tránh nói "hàng 1/hàng 2" vì dễ nhầm với hàng của sân Oán Linh phía trên.
 const rowName = (r: number) => (FIELD_ROWS === 2 ? (r === 0 ? 'hàng trên' : 'hàng dưới') : `hàng ${r + 1}`);
 const cell = (r: number, c: number) => `${rowName(r)}, cột ${c + 1}`;
+// Cùng hàng thì chỉ cần nói cột; khác hàng mới nêu cả hàng.
+const route = (fr: number, fc: number, r: number, c: number) =>
+  fr === r ? `cột ${fc + 1} → cột ${c + 1} (${rowName(r)})` : `${cell(fr, fc)} → ${cell(r, c)}`;
 
 /** Hành động -> JSON cho lớp phủ (vòng tròn, mũi tên, thẻ hướng dẫn từng bước). */
 export function overlayFromSuggestion(s: Suggestion, board: Board): string {
@@ -33,35 +36,34 @@ export function overlayFromSuggestion(s: Suggestion, board: Board): string {
       const comp = board.rest[m.rest];
       out.from = { zone: 'rest', a: m.rest };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      steps.push(`Kéo ${who(comp)} từ Khu Nghỉ Ngơi (thẻ ${m.rest + 1}) xuống ${cell(m.r, m.c)}`);
+      steps.push(`Đặt ${who(comp)} từ thẻ ${m.rest + 1} → ${cell(m.r, m.c)}`);
       break;
     }
     case 'move':
       out.from = { zone: 'field', a: m.fr, b: m.fc };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      steps.push(`Kéo ${who(board.field[m.fr]?.[m.fc])} từ ${cell(m.fr, m.fc)} sang ${cell(m.r, m.c)}`);
+      steps.push(`Dời ${who(board.field[m.fr]?.[m.fc])}: ${route(m.fr, m.fc, m.r, m.c)}`);
       break;
-    case 'merge': {
-      const src = board.field[m.fr]?.[m.fc];
+    case 'merge':
       out.from = { zone: 'field', a: m.fr, b: m.fc };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      steps.push(`Gộp để lên cấp: kéo ${who(src)} (${cell(m.fr, m.fc)}) vào ${cell(m.r, m.c)}`);
+      steps.push(`Gộp ${who(board.field[m.fr]?.[m.fc])}: ${route(m.fr, m.fc, m.r, m.c)}`);
       break;
-    }
     case 'swap':
       out.from = { zone: 'field', a: m.fr, b: m.fc };
       out.to = { zone: 'field', a: m.r, b: m.c };
-      steps.push(`Đổi chỗ ${cell(m.fr, m.fc)} ⇄ ${cell(m.r, m.c)}`);
+      steps.push(`Đổi chỗ: ${route(m.fr, m.fc, m.r, m.c)}`);
       break;
     case 'pass':
       steps.push('Lượt này không cần di chuyển');
   }
-  if (a.fireCol !== undefined) { out.fireCol = a.fireCol; steps.push(`Dùng Rune Ngọn Lửa lên cột ${a.fireCol + 1} (vùng đỏ)`); }
-  if (a.ice) { out.ice = true; steps.push('Dùng Rune Băng Giá (vùng xanh)'); }
-  if (!s.survives) steps.push('⚠ Khó thoát, cân nhắc dùng rune');
+  // Hai bùa nằm ở góc dưới phải: lớp phủ khoanh đúng nút bùa cần bấm.
+  if (a.fireCol !== undefined) { out.fireCol = a.fireCol; steps.push(`Bùa Lửa: chọn cột ${a.fireCol + 1}`); }
+  if (a.ice) { out.ice = true; steps.push('Dùng Bùa Băng'); }
+  if (!s.survives) steps.push('⚠ Khó thoát, cân nhắc dùng bùa');
 
   out.steps = steps;
   out.text = steps.join(' + '); // dự phòng cho bản native cũ
-  out.hint = 'Làm xong bấm 👻 để cập nhật gợi ý';
+  out.hint = 'Xong bấm 👻 để cập nhật';
   return JSON.stringify(out);
 }

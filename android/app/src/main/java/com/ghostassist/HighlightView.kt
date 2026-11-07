@@ -127,14 +127,28 @@ class HighlightView(ctx: Context) : View(ctx) {
                 head(c, x2, y2, ang, hs, Color.WHITE)
                 if (kind == "swap") head(c, x1, y1, ang + Math.PI.toFloat(), hs, Color.WHITE)
             }
+            // khoanh nút bùa cần bấm
+            fun talisman(pt: PointF, label: String, col: Int) {
+                val cx = pt.x * w; val cy = pt.y * h; val rr = Geo.BTN_R * w
+                stroke.strokeWidth = 9f * u; stroke.color = col
+                c.drawCircle(cx, cy, rr, stroke)
+                badgeText.textSize = 26f * u
+                val bw = badgeText.measureText(label) + 26f * u; val bh = 42f * u
+                val l = cx - rr - bw - 8f * u
+                fill.color = col
+                c.drawRoundRect(l, cy - bh / 2, l + bw, cy + bh / 2, bh / 2, bh / 2, fill)
+                c.drawText(label, l + bw / 2, cy + 9f * u, badgeText)
+            }
+            if (s.has("fireCol")) talisman(Geo.FIRE_BTN, "BÙA LỬA", 0xFFFF6B35.toInt())
+            if (s.optBoolean("ice")) talisman(Geo.ICE_BTN, "BÙA BĂNG", 0xFF32C5FF.toInt())
             val tp = 26f * u
             if (fr != null) badge(c, fr, if (s.optString("kind") == "swap") "A" else "TỪ", 0xFFFFD60A.toInt(), tp)
             if (tr != null) badge(c, tr, when (s.optString("kind")) { "merge" -> "GỘP"; "swap" -> "B"; else -> "ĐẾN" }, 0xFF34C759.toInt(), tp)
         }
 
         if (steps.isNotEmpty()) {
-            text.textSize = 38f * u; hintPaint.textSize = 30f * u
-            val pad = 22f * u
+            text.textSize = 34f * u; hintPaint.textSize = 26f * u
+            val pad = 16f * u
             val body = if (steps.size > 1) steps.mapIndexed { i, t -> "${i + 1}. $t" }.joinToString("\n") else steps[0]
             val tw = (w - 2 * (24f * u) - 2 * pad).toInt()
             val lay = StaticLayout.Builder.obtain(body, 0, body.length, text, tw)
@@ -144,8 +158,8 @@ class HighlightView(ctx: Context) : View(ctx) {
             }
             val cardH = lay.height + (hl?.height ?: 0) + (if (hl != null) 10f * u else 0f) + 2 * pad
             // đặt ngay trên sân Oán Linh: không che thanh điểm phía trên lẫn bàn cờ
-            val bottom = Geo.GHOST_TOP * h - 12f * u
-            val top = maxOf(bottom - cardH, 0.10f * h)
+            val bottom = Geo.GHOST_TOP * h - 0.022f * h
+            val top = maxOf(bottom - cardH, 0.105f * h)
             val left = 24f * u
             fill.color = 0xEE0E151C.toInt()
             c.drawRoundRect(left, top, w - left, top + cardH, 24f * u, 24f * u, fill)

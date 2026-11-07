@@ -27,6 +27,11 @@ object Geo {
     const val REST_TOP = 1820f / 2047f
     const val REST_H = 190f / 2047f
 
+    /** Tâm 2 nút bùa (Lửa trên, Băng dưới) và bán kính, theo tỉ lệ chiều rộng màn hình. */
+    val FIRE_BTN = PointF(0.894f, 0.8936f)
+    val ICE_BTN = PointF(0.894f, 0.962f)
+    const val BTN_R = 0.065f
+
     val FIRE_NUM = RectF(800f / 942f, 1835f / 2047f, 930f / 942f, 1905f / 2047f)
     val ICE_NUM = RectF(800f / 942f, 1965f / 2047f, 930f / 942f, 2035f / 2047f)
 
